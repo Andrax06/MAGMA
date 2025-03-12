@@ -4,7 +4,7 @@ body {
     margin: 0;
     padding: 0;
     line-height: 1.6;
-    width: 100%; /* Asegurar que el body ocupe todo el ancho */
+    width: 100%;
 }
 
 header {
@@ -12,8 +12,8 @@ header {
     color: white;
     text-align: center;
     padding: 20px;
-    width: 100%; /* Asegurar que ocupe todo el ancho */
-    box-sizing: border-box; /* Incluir padding en el ancho */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 header h1 {
@@ -33,16 +33,16 @@ header p {
     background-color: white;
     border-radius: 10px;
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-    width: 100%; /* Asegurar que ocupe el ancho completo */
-    box-sizing: border-box; /* Incluir padding en el ancho */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 #habitaciones {
     max-width: 1200px;
     margin: 20px auto;
     padding: 20px;
-    width: 100%; /* Asegurar que ocupe el ancho completo */
-    box-sizing: border-box; /* Incluir padding en el ancho */
+    width: 100%;
+    box-sizing: border-box;
 }
 
 #habitaciones h2 {
@@ -62,7 +62,7 @@ header p {
     vertical-align: top;
     cursor: pointer;
     transition: transform 0.2s;
-    box-sizing: border-box; /* Incluir padding/márgenes en el ancho */
+    box-sizing: border-box;
 }
 
 .habitacion:hover {
@@ -135,8 +135,30 @@ footer {
     color: white;
     position: relative;
     bottom: 0;
-    width: 100%; /* Ya ocupa el ancho completo */
+    width: 100%;
     box-sizing: border-box;
+}
+
+/* Estilos para el botón de WhatsApp */
+.whatsapp-btn {
+    position: fixed; /* Fija el botón en la pantalla */
+    bottom: 20px; /* Distancia desde la parte inferior */
+    left: 20px; /* Distancia desde la izquierda */
+    width: 60px; /* Tamaño del botón */
+    height: 60px;
+    background-color: #25D366; /* Verde de WhatsApp */
+    border-radius: 50%; /* Hace el botón redondo */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-decoration: none;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1000; /* Asegura que esté sobre otros elementos */
+}
+
+.whatsapp-icon {
+    width: 40px; /* Tamaño del ícono */
+    height: 40px;
 }
 
 /* Responsividad para móviles */
@@ -150,11 +172,11 @@ footer {
     #descripcion {
         margin: 10px;
         padding: 15px;
-        width: 100%; /* Asegurar ancho completo */
+        width: 100%;
     }
     #habitaciones {
         padding: 10px;
-        width: 100%; /* Asegurar ancho completo */
+        width: 100%;
     }
     .habitacion {
         display: block;
@@ -169,5 +191,15 @@ footer {
         width: 100%;
         height: auto;
         margin: 5px 0;
+    }
+    .whatsapp-btn {
+        width: 50px;
+        height: 50px;
+        bottom: 15px;
+        left: 15px;
+    }
+    .whatsapp-icon {
+        width: 35px;
+        height: 35px;
     }
 }
