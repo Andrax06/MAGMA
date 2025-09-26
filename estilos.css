@@ -187,12 +187,22 @@ footer {
 }
 
 @media (max-width: 768px) {
+    header {
+        padding: 15px;
+        flex-direction: column; /* Apila verticalmente */
+        text-align: center;
+        position: relative; /* Evita superposiciones */
+    }
     .logo-container {
-        top: 10px;
-        left: 10px;
+        position: relative; /* Quita el posicionamiento absoluto */
+        margin-bottom: 15px; /* Más espacio para evitar superposición */
     }
     .logo {
-        max-width: 100px;
+        max-width: 100px; /* Tamaño reducido */
+    }
+    .header-content {
+        flex-grow: 0; /* Evita expansión innecesaria */
+        width: 100%; /* Ocupa todo el ancho disponible */
     }
     header h1 {
         font-size: 28px;
