@@ -70,9 +70,9 @@ header p {
 }
 
 .habitacion img {
-    width: 100%;
-    height: 200px;
-    object-fit: cover;
+    width: 100%; /* Ajusta al ancho del contenedor .habitacion */
+    height: 300px; /* Aumentada para fotos verticales */
+    object-fit: cover; /* Recorta las imágenes para que encajen sin distorsión */
     border-radius: 5px;
 }
 
@@ -127,9 +127,9 @@ header p {
 }
 
 #modal-imagenes img {
-    width: 200px;
-    height: 150px;
-    object-fit: cover;
+    width: 200px; /* Mantenemos el ancho */
+    height: 300px; /* Aumentada para fotos verticales */
+    object-fit: cover; /* Recorta para mantener proporciones */
     margin: 10px;
     border-radius: 5px;
 }
@@ -188,13 +188,16 @@ footer {
         width: 90%;
         margin: 10px auto;
     }
+    .habitacion img {
+        height: 250px; /* Ajuste para móviles, menor que en escritorio pero suficiente para vertical */
+    }
     .modal-contenido {
         width: 90%;
         padding: 15px;
     }
     #modal-imagenes img {
-        width: 100%;
-        height: auto;
+        width: 100%; /* Llenar el contenedor en móviles */
+        height: 250px; /* Ajuste proporcional para móviles */
         margin: 5px 0;
     }
     .whatsapp-btn {
