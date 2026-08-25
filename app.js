@@ -24,10 +24,10 @@ const firebaseConfig = {
   measurementId: "G-QCHLF4MGLD"
 };
 
-const storage = getStorage();
 const app = initializeApp(firebaseConfig);
 const auth = getAuth();
 const db = getFirestore();
+const storage = getStorage();
 
 // ⚠️ Pega aquí tu UID de administrador (Firebase Console → Authentication → copia el
 // "User UID" de tu propia cuenta). Debe coincidir EXACTO con el que pongas en firestore.rules.
