@@ -15,7 +15,7 @@ import {
 
 // 🔧 CONFIG FIREBASE (no es secreta, la seguridad vive en firestore.rules)
 const firebaseConfig = {
-  apiKey: "AIzaSyCe--wCqXIGLr7ookvqjAC-KtAR9QgTF-Y",
+  apiKey: "AIzaSyCe",
   authDomain: "magma-a59be.firebaseapp.com",
   projectId: "magma-a59be",
   storageBucket: "magma-a59be.firebasestorage.app",
@@ -25,9 +25,9 @@ const firebaseConfig = {
 };
 
 const app = initializeApp(firebaseConfig);
-const auth = getAuth();
-const db = getFirestore();
-const storage = getStorage();
+const auth = getAuth(app);
+const db = getFirestore(app);
+const storage = getStorage(app);
 
 // ⚠️ Pega aquí tu UID de administrador (Firebase Console → Authentication → copia el
 // "User UID" de tu propia cuenta). Debe coincidir EXACTO con el que pongas en firestore.rules.
