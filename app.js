@@ -15,7 +15,7 @@ import {
 
 // 🔧 CONFIG FIREBASE (no es secreta, la seguridad vive en firestore.rules)
 const firebaseConfig = {
-  apiKey: "AIzaSyCe",
+  apiKey: "AIzaSyCe--wCqXIGLr7ookvqjAC-KtAR9QgTF-Y",
   authDomain: "magma-a59be.firebaseapp.com",
   projectId: "magma-a59be",
   storageBucket: "magma-a59be.firebasestorage.app",
