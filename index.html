@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAGMA</title>
     <link rel="stylesheet" href="estilos.css">
+    <link rel="stylesheet" href="chatbot-estilos.css">
 </head>
 <body>
     <header>
@@ -16,6 +17,25 @@
             <p>Encuentra tu espacio ideal</p>
         </div>
     </header>
+
+    <!-- Caja de acceso de inquilinos (reemplaza el botón "Iniciar sesión" que llamaba a login()) -->
+    <div id="auth-caja">
+        <div id="auth-form-login">
+            <h3>Iniciar sesión</h3>
+            <input id="login-email" type="email" placeholder="Correo">
+            <input id="login-password" type="password" placeholder="Contraseña">
+            <button onclick="manejarLogin()">Entrar</button>
+            <p>¿No tienes cuenta? <a href="#" onclick="mostrarRegistro(); return false;">Regístrate</a></p>
+        </div>
+
+        <div id="auth-form-registro" style="display:none">
+            <h3>Crear cuenta</h3>
+            <input id="registro-nombre" type="text" placeholder="Nombre completo">
+            <input id="registro-email" type="email" placeholder="Correo">
+            <input id="registro-password" type="password" placeholder="Contraseña (mín. 6 caracteres)">
+            <button onclick="manejarRegistro()">Registrarme</button>
+        </div>
+    </div>
 
     <section id="descripcion">
         <h2>Sobre Nosotros</h2>
@@ -40,10 +60,57 @@
         <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" class="whatsapp-icon">
     </a>
 
+    <!-- Burbuja y panel del chatbot -->
+    <button class="chat-burbuja-boton" onclick="alternarChat()" aria-label="Abrir chat">💬</button>
+    <div id="chat-panel" class="chat-panel">
+        <div class="chat-header">
+            Asistente virtual
+            <span onclick="alternarChat()" style="cursor:pointer">✕</span>
+        </div>
+        <div id="chat-mensajes" class="chat-mensajes"></div>
+        <div class="chat-input-fila">
+            <input id="chat-input" type="text" placeholder="Escribe tu pregunta...">
+            <button onclick="enviarMensajeChat()">Enviar</button>
+        </div>
+    </div>
+
     <footer>
         <p>Contacto: Esteban Vargas | WhatsApp: 310 2733350 | Email: Gruporentcap@gmail.com</p>
     </footer>
 
+    <!-- IMPORTANTE: script.js primero (pinta las habitaciones), luego app.js (auth + pagos) -->
     <script src="script.js"></script>
+    <script type="module" src="app.js"></script>
+    <script type="module" src="chatbot.js"></script>
+
+    <script>
+        function mostrarRegistro() {
+            document.getElementById("auth-form-login").style.display = "none";
+            document.getElementById("auth-form-registro").style.display = "block";
+        }
+
+        async function manejarLogin() {
+            const email = document.getElementById("login-email").value;
+            const password = document.getElementById("login-password").value;
+            const resultado = await window.iniciarSesion(email, password);
+            if (!resultado.ok) alert("Error: " + resultado.error);
+        }
+
+        async function manejarRegistro() {
+            const nombre = document.getElementById("registro-nombre").value;
+            const email = document.getElementById("registro-email").value;
+            const password = document.getElementById("registro-password").value;
+            const resultado = await window.registrarInquilino(email, password, nombre);
+            if (!resultado.ok) alert("Error: " + resultado.error);
+        }
+
+        window.addEventListener("sesion-cambiada", (evento) => {
+            const caja = document.getElementById("auth-caja");
+            if (evento.detail.user) {
+                caja.innerHTML = `<p>Sesión iniciada como ${evento.detail.user.email}
+                    <button onclick="cerrarSesion()">Cerrar sesión</button></p>`;
+            }
+        });
+    </script>
 </body>
 </html>
