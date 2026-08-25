@@ -8,11 +8,12 @@ import {
   onAuthStateChanged,
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, updateDoc, query, collection, where, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
+import {
+  getFirestore, doc, setDoc, getDoc, updateDoc, addDoc,
+  collection, query, where, orderBy, getDocs
+} from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
-// 🔧 CONFIG FIREBASE
-// Esta configuración NO es secreta: identifica tu proyecto, no da permisos por sí sola.
-// La seguridad real vive en las reglas de Firestore (firestore.rules) y en Firebase Auth.
+// 🔧 CONFIG FIREBASE (no es secreta, la seguridad vive en firestore.rules)
 const firebaseConfig = {
   apiKey: "AIzaSyCe--wCqXIGLr7ookvqjAC-KtAR9QgTF-Y",
   authDomain: "magma-a59be.firebaseapp.com",
@@ -28,8 +29,9 @@ const app = initializeApp(firebaseConfig);
 const auth = getAuth();
 const db = getFirestore();
 
-// ⚠️ URL de tu Cloudflare Worker (ver worker.js). Reemplázala cuando la despliegues.
-const WORKER_URL = "https://tu-worker.tu-usuario.workers.dev";
+// ⚠️ Pega aquí tu UID de administrador (Firebase Console → Authentication → copia el
+// "User UID" de tu propia cuenta). Debe coincidir EXACTO con el que pongas en firestore.rules.
+const ADMIN_UIDS = ["JEj4kmfHToUotLItzPA7LWu6it73"];
 
 // ============================================================
 // 🔐 AUTENTICACIÓN
@@ -41,9 +43,10 @@ window.registrarInquilino = async function (email, password, nombre) {
     const uid = credencial.user.uid;
 
     await setDoc(doc(db, "inquilinos", uid), {
-      nombre: nombre,
-      email: email,
+      nombre,
+      email,
       habitacionId: null,
+      diaPago: 5, // valor por defecto, el administrador lo puede ajustar luego
       creado: new Date().toISOString()
     });
 
@@ -66,111 +69,204 @@ window.cerrarSesion = function () {
   return signOut(auth);
 };
 
-onAuthStateChanged(auth, (user) => {
-  const eventoSesion = new CustomEvent("sesion-cambiada", { detail: { user } });
-  window.dispatchEvent(eventoSesion);
+onAuthStateChanged(auth, async (user) => {
+  window.dispatchEvent(new CustomEvent("sesion-cambiada", { detail: { user } }));
+  if (user) {
+    await mostrarPanelInquilino(user.uid);
+  } else {
+    document.getElementById("panel-inquilino").style.display = "none";
+  }
 });
 
 // ============================================================
-// 💳 PAGO CON WOMPI (firma de integridad calculada en el Worker)
+// 🏠 PANEL DEL INQUILINO
 // ============================================================
 
-window.pagarHabitacion = async function (habitacionId) {
-  const monto = 400000; // COP
-  const usuario = auth.currentUser;
-  if (!usuario) {
-    alert("Debes iniciar sesión antes de pagar.");
+async function mostrarPanelInquilino(uid) {
+  const panel = document.getElementById("panel-inquilino");
+  panel.style.display = "block";
+
+  const snapPerfil = await getDoc(doc(db, "inquilinos", uid));
+  if (!snapPerfil.exists()) return;
+  const perfil = snapPerfil.data();
+
+  pintarMiHabitacion(perfil);
+  pintarRecordatorio(perfil);
+  await pintarCargos(uid);
+
+  if (ADMIN_UIDS.includes(uid)) {
+    document.getElementById("panel-admin").style.display = "block";
+  }
+}
+
+function pintarMiHabitacion(perfil) {
+  const contenedor = document.getElementById("panel-habitacion");
+  const habitaciones = window.habitaciones || [];
+  const habitacion = habitaciones.find(h => h.id === perfil.habitacionId);
+
+  if (!habitacion) {
+    contenedor.innerHTML = `<p>Aún no tienes una habitación asignada. Contáctanos por WhatsApp o espera a que el administrador la asigne.</p>`;
     return;
   }
 
-  const referencia = "hab_" + habitacionId + "_" + Date.now();
+  contenedor.innerHTML = `
+    <p><strong>${habitacion.nombre}</strong> — ${habitacion.precio}</p>
+    <p>${habitacion.descripcion}</p>
+  `;
+}
 
-  await setDoc(doc(db, "pagos", referencia), {
-    uid: usuario.uid,
-    habitacion: habitacionId,
-    monto: monto,
-    estado: "pendiente",
-    fecha: new Date().toISOString()
+function pintarRecordatorio(perfil) {
+  const contenedor = document.getElementById("panel-recordatorio");
+  const hoy = new Date();
+  let proximo = new Date(hoy.getFullYear(), hoy.getMonth(), perfil.diaPago);
+  if (proximo < hoy) proximo = new Date(hoy.getFullYear(), hoy.getMonth() + 1, perfil.diaPago);
+
+  const diasRestantes = Math.ceil((proximo - hoy) / (1000 * 60 * 60 * 24));
+
+  contenedor.innerHTML = `
+    <p>Tu pago vence el día <strong>${perfil.diaPago}</strong> de cada mes.</p>
+    <p>Faltan <strong>${diasRestantes}</strong> día(s).</p>
+    <button id="btn-activar-recordatorio">Activar aviso en este navegador</button>
+    <p id="estado-recordatorio" style="font-size:13px;color:#666"></p>
+  `;
+
+  document.getElementById("btn-activar-recordatorio").addEventListener("click", () => {
+    activarRecordatorioNavegador(perfil.diaPago);
   });
+}
 
-  let firma;
-  try {
-    const respuesta = await fetch(`${WORKER_URL}/firmar-pago`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ referencia, monto })
+function activarRecordatorioNavegador(diaPago) {
+  const estado = document.getElementById("estado-recordatorio");
+
+  if (!("Notification" in window)) {
+    estado.textContent = "Tu navegador no soporta notificaciones.";
+    return;
+  }
+
+  Notification.requestPermission().then(permiso => {
+    if (permiso !== "granted") {
+      estado.textContent = "No se activó el permiso de notificaciones.";
+      return;
+    }
+    localStorage.setItem("magma_dia_pago", String(diaPago));
+    localStorage.setItem("magma_recordatorio_activo", "true");
+    estado.textContent = "Listo. Te avisaremos cuando abras el sitio cerca de la fecha de pago.";
+    revisarRecordatorioPendiente();
+  });
+}
+
+// Revisa, cada vez que se carga el sitio, si hay que mostrar el aviso
+// (funciona solo mientras el usuario visita el sitio; no es un recordatorio en segundo plano).
+function revisarRecordatorioPendiente() {
+  const activo = localStorage.getItem("magma_recordatorio_activo") === "true";
+  const diaPago = Number(localStorage.getItem("magma_dia_pago"));
+  if (!activo || !diaPago || Notification.permission !== "granted") return;
+
+  const hoy = new Date();
+  const diff = diaPago - hoy.getDate();
+  if (diff >= 0 && diff <= 3) {
+    new Notification("Recordatorio de pago MAGMA", {
+      body: `Tu pago vence el día ${diaPago}. ¡No lo olvides!`
     });
-    if (!respuesta.ok) throw new Error("No se pudo generar la firma de pago");
-    const datos = await respuesta.json();
-    firma = datos.firma;
-  } catch (error) {
-    alert("Error preparando el pago: " + error.message);
+  }
+}
+window.addEventListener("DOMContentLoaded", revisarRecordatorioPendiente);
+
+// ============================================================
+// 💰 CARGOS (cuentas aparte de la renta)
+// ============================================================
+
+async function pintarCargos(uid) {
+  const contenedor = document.getElementById("panel-cargos");
+  const q = query(collection(db, "cargos"), where("uid", "==", uid), orderBy("fecha", "desc"));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    contenedor.innerHTML = "<p>No tienes cargos adicionales registrados.</p>";
     return;
   }
 
-  const params = new URLSearchParams({
-    "public-key": "TU_LLAVE_PUBLICA_WOMPI",
-    "currency": "COP",
-    "amount-in-cents": String(monto * 100),
-    "reference": referencia,
-    "signature:integrity": firma
+  contenedor.innerHTML = "";
+  snap.forEach(docSnap => {
+    const cargo = docSnap.data();
+    const id = docSnap.id;
+    const fila = document.createElement("div");
+    fila.className = "cargo-fila";
+    fila.innerHTML = `
+      <p><strong>${cargo.concepto}</strong> — ${cargo.monto.toLocaleString("es-CO")} COP</p>
+      <p style="font-size:13px;color:#666">Estado: ${cargo.estado}</p>
+      ${cargo.estado === "pendiente" ? `
+        <input type="file" id="comprobante-${id}" accept="image/*,.pdf">
+        <button onclick="subirComprobanteCargo('${id}')">Subir comprobante</button>
+      ` : ""}
+    `;
+    contenedor.appendChild(fila);
   });
+}
 
-  window.open(`https://checkout.wompi.co/p/?${params.toString()}`, "_blank");
-};
-
-// ============================================================
-// 📎 SUBIR COMPROBANTE DE PAGO (Firebase Storage)
-// ============================================================
-
-window.subirComprobante = async function (habitacionId) {
+window.subirComprobanteCargo = async function (cargoId) {
   const usuario = auth.currentUser;
-  if (!usuario) {
-    alert("Debes iniciar sesión antes de subir un comprobante.");
-    return;
-  }
+  if (!usuario) return;
 
-  const input = document.getElementById(`comprobante-${habitacionId}`);
-  const estadoTexto = document.getElementById(`estado-${habitacionId}`);
+  const input = document.getElementById(`comprobante-${cargoId}`);
   const archivo = input?.files?.[0];
-
   if (!archivo) {
     alert("Selecciona un archivo primero.");
     return;
   }
 
-  estadoTexto.textContent = "Estado: subiendo comprobante...";
-
   try {
-    // 1) Subir el archivo a Storage, organizado por usuario y habitación
-    const ruta = `comprobantes/${usuario.uid}/hab_${habitacionId}_${Date.now()}_${archivo.name}`;
-    const referenciaStorage = ref(storage, ruta);
-    await uploadBytes(referenciaStorage, archivo);
-
-    // 2) Buscar el pago "pendiente" más reciente de esta habitación para este usuario
-    const q = query(
-      collection(db, "pagos"),
-      where("uid", "==", usuario.uid),
-      where("habitacion", "==", habitacionId),
-      orderBy("fecha", "desc"),
-      limit(1)
-    );
-    const resultados = await getDocs(q);
-
-    if (resultados.empty) {
-      estadoTexto.textContent = "Estado: comprobante subido, pero no encontré un pago iniciado. Contáctanos por WhatsApp.";
-      return;
-    }
-
-    const pagoDoc = resultados.docs[0];
-    await updateDoc(doc(db, "pagos", pagoDoc.id), {
+    const ruta = `comprobantes/${usuario.uid}/${cargoId}_${Date.now()}_${archivo.name}`;
+    await uploadBytes(ref(storage, ruta), archivo);
+    await updateDoc(doc(db, "cargos", cargoId), {
       comprobanteRuta: ruta,
       estado: "en_revision"
     });
-
-    estadoTexto.textContent = "Estado: comprobante recibido, en revisión.";
+    await pintarCargos(usuario.uid);
   } catch (error) {
-    estadoTexto.textContent = "Estado: error al subir el comprobante.";
-    alert("Error: " + error.message);
+    alert("Error al subir el comprobante: " + error.message);
   }
 };
+
+// ============================================================
+// 👤 PANEL DE ADMINISTRADOR (solo visible para ADMIN_UIDS)
+// ============================================================
+
+window.adminAsignarHabitacion = async function () {
+  const correo = document.getElementById("admin-correo-hab").value.trim();
+  const habitacionId = Number(document.getElementById("admin-habitacion-id").value);
+  const diaPago = Number(document.getElementById("admin-dia-pago").value) || 5;
+
+  const uid = await buscarUidPorCorreo(correo);
+  if (!uid) return alert("No encontré un inquilino con ese correo.");
+
+  await updateDoc(doc(db, "inquilinos", uid), { habitacionId, diaPago });
+  alert("Habitación asignada correctamente.");
+};
+
+window.adminCrearCargo = async function () {
+  const correo = document.getElementById("admin-correo-cargo").value.trim();
+  const concepto = document.getElementById("admin-concepto").value.trim();
+  const monto = Number(document.getElementById("admin-monto").value);
+
+  const uid = await buscarUidPorCorreo(correo);
+  if (!uid) return alert("No encontré un inquilino con ese correo.");
+  if (!concepto || !monto) return alert("Completa el concepto y el monto.");
+
+  await addDoc(collection(db, "cargos"), {
+    uid,
+    concepto,
+    monto,
+    fecha: new Date().toISOString(),
+    estado: "pendiente",
+    comprobanteRuta: null
+  });
+  alert("Cargo creado correctamente.");
+};
+
+async function buscarUidPorCorreo(correo) {
+  const q = query(collection(db, "inquilinos"), where("email", "==", correo));
+  const snap = await getDocs(q);
+  if (snap.empty) return null;
+  return snap.docs[0].id;
+}

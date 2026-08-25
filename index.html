@@ -18,7 +18,7 @@
         </div>
     </header>
 
-    <!-- Caja de acceso de inquilinos (reemplaza el botón "Iniciar sesión" que llamaba a login()) -->
+    <!-- Acceso de inquilinos -->
     <div id="auth-caja">
         <div id="auth-form-login">
             <h3>Iniciar sesión</h3>
@@ -36,6 +36,39 @@
             <button onclick="manejarRegistro()">Registrarme</button>
         </div>
     </div>
+
+    <!-- Panel del inquilino (oculto hasta iniciar sesión) -->
+    <section id="panel-inquilino" style="display:none">
+        <div class="panel-caja">
+            <h3>Mi habitación</h3>
+            <div id="panel-habitacion"></div>
+        </div>
+        <div class="panel-caja">
+            <h3>Recordatorio de pago</h3>
+            <div id="panel-recordatorio"></div>
+        </div>
+        <div class="panel-caja">
+            <h3>Mis cuentas</h3>
+            <div id="panel-cargos"></div>
+        </div>
+
+        <!-- Panel de administrador (oculto salvo para ADMIN_UIDS) -->
+        <div id="panel-admin" class="panel-caja" style="display:none">
+            <h3>Administrador</h3>
+
+            <h4>Asignar habitación</h4>
+            <input id="admin-correo-hab" type="email" placeholder="Correo del inquilino">
+            <input id="admin-habitacion-id" type="number" placeholder="Número de habitación (ej. 101)">
+            <input id="admin-dia-pago" type="number" placeholder="Día de pago (1-28)">
+            <button onclick="adminAsignarHabitacion()">Asignar</button>
+
+            <h4>Crear cargo (cuenta aparte)</h4>
+            <input id="admin-correo-cargo" type="email" placeholder="Correo del inquilino">
+            <input id="admin-concepto" type="text" placeholder="Concepto (ej. Daño en puerta)">
+            <input id="admin-monto" type="number" placeholder="Monto en COP">
+            <button onclick="adminCrearCargo()">Crear cargo</button>
+        </div>
+    </section>
 
     <section id="descripcion">
         <h2>Sobre Nosotros</h2>
@@ -60,7 +93,7 @@
         <img src="https://upload.wikimedia.org/wikipedia/commons/6/6b/WhatsApp.svg" alt="WhatsApp" class="whatsapp-icon">
     </a>
 
-    <!-- Burbuja y panel del chatbot -->
+    <!-- Chatbot -->
     <button class="chat-burbuja-boton" onclick="alternarChat()" aria-label="Abrir chat">💬</button>
     <div id="chat-panel" class="chat-panel">
         <div class="chat-header">
@@ -78,7 +111,7 @@
         <p>Contacto: Esteban Vargas | WhatsApp: 310 2733350 | Email: Gruporentcap@gmail.com</p>
     </footer>
 
-    <!-- IMPORTANTE: script.js primero (pinta las habitaciones), luego app.js (auth + pagos) -->
+    <!-- script.js primero (pinta las habitaciones y expone window.habitaciones), luego app.js -->
     <script src="script.js"></script>
     <script type="module" src="app.js"></script>
     <script type="module" src="chatbot.js"></script>

@@ -51,6 +51,10 @@ const habitaciones = [
     { id: 508, piso: 5, nombre: "Habitación 508", precio: "400.000 COP/mes", imagen: "./Img/508/1.jpg", disponible: true, descripcion: "Cerca de la escalera.", imagenes: ["./Img/508/1.jpg", "./Img/508/2.jpg", "./Img/508/3.jpg", "./Img/508/4.jpg", "./Img/508/5.jpg"] },
 ];
 
+// Se expone globalmente para que app.js (panel del inquilino) pueda mostrar
+// el nombre/precio de la habitación asignada sin duplicar estos datos.
+window.habitaciones = habitaciones;
+
 // Función para mostrar habitaciones disponibles
 function mostrarHabitaciones() {
     const contenedor = document.getElementById("contenedor-habitaciones");
@@ -77,7 +81,7 @@ function mostrarHabitaciones() {
     }
 }
 
-// Función para mostrar detalles en el modal
+// Función para mostrar detalles en el modal (solo información, sin pagos aquí)
 function mostrarDetalles(habitacion) {
     const modal = document.getElementById("modal");
     const modalTitulo = document.getElementById("modal-titulo");
@@ -88,16 +92,9 @@ function mostrarDetalles(habitacion) {
     modalDescripcion.innerHTML = `
         ${habitacion.descripcion}
         <br><br>
-        <button onclick="pagarHabitacion(${habitacion.id})">
-        Pagar ${habitacion.precio}
-        </button>
-        <br><br>
-        <input type="file" id="comprobante-${habitacion.id}" accept="image/*,.pdf"><br><br>
-        <button onclick="subirComprobante(${habitacion.id})">
-        Subir comprobante
-        </button>
-        <p id="estado-${habitacion.id}">Estado: pendiente</p>
-`;
+        <p><strong>Precio: ${habitacion.precio}</strong></p>
+        <p style="font-size:13px;color:#666">Para reservar, regístrate e inicia sesión; nuestro equipo la asignará a tu cuenta.</p>
+    `;
 
     modalImagenes.innerHTML = "";
     habitacion.imagenes.forEach(imgSrc => {
