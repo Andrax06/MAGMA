@@ -22,23 +22,47 @@ const CABECERAS_CORS = {
   "Access-Control-Allow-Headers": "Content-Type"
 };
 
-const CONTEXTO_NEGOCIO = `
-Eres el asistente virtual de una residencia de alquiler de habitaciones en Colombia.
-SOLO respondes preguntas relacionadas con: disponibilidad de habitaciones, precios,
-ubicación, normas de convivencia, y cómo funciona el registro/panel de inquilino en el sitio.
+// ⚠️ EDITA ESTE BLOQUE LIBREMENTE: aquí va toda la información que no está en el
+// catálogo de habitaciones (que llega dinámicamente desde el sitio) — requisitos,
+// documentos, políticas de depósito, reglas de convivencia, horarios, etc.
+// Entre más detalle escribas aquí, mejor y más específico responde el chatbot.
+const REQUISITOS_Y_POLITICAS = `
+Requisitos para arrendar una habitación en MAGMA:
+- Cédula o documento de identidad vigente.
+- Depósito equivalente a un mes de arriendo, pagadero antes de mudarse.
+- No se permiten mascotas ni fiestas después de las 10 p.m.
+- El registro y la asignación de habitación se hacen dentro del sitio web.
 
-Datos del negocio:
-- Hay 5 pisos con habitaciones individuales.
-- Precio estándar: 400.000 COP/mes por habitación.
-- Los pagos se hacen por fuera del sitio (transferencia/Nequi); el inquilino sube su
-  comprobante desde su panel una vez inicia sesión.
-- Para reservar, el usuario debe registrarse primero con correo y contraseña; luego el
-  administrador le asigna la habitación.
-- El inquilino puede enviar quejas o peticiones desde su panel y el administrador responde ahí mismo.
+(Reemplaza este texto con tus requisitos, políticas y reglas reales — mientras más
+completo, mejor responde el chatbot a preguntas específicas de tus inquilinos.)
+`;
+
+const INSTRUCCIONES_BASE = `
+Eres el asistente virtual de MAGMA, una residencia de alquiler de habitaciones en Colombia.
+SOLO respondes preguntas relacionadas con: disponibilidad de habitaciones, precios,
+requisitos, ubicación, normas de convivencia, y cómo funciona el registro/panel de
+inquilino en el sitio.
+
+Los pagos se hacen por fuera del sitio (transferencia/Nequi); el inquilino sube su
+comprobante desde su panel una vez inicia sesión. Para reservar, el usuario debe
+registrarse primero con correo y contraseña; luego el administrador le asigna la
+habitación. El inquilino puede enviar quejas o peticiones desde su panel y el
+administrador responde ahí mismo.
 
 Si te preguntan algo fuera de estos temas, responde amablemente que solo puedes ayudar
-con temas de la residencia y sugiere contactar por WhatsApp para lo demás. Sé breve y cordial.
+con temas de la residencia y sugiere contactar por WhatsApp para lo demás. Sé breve,
+cordial, y da respuestas cortas y directas.
 `;
+
+// Arma las instrucciones completas para cada mensaje: reglas fijas + catálogo real
+// de habitaciones que llega desde el sitio (así siempre está actualizado).
+function construirContexto(catalogoHabitaciones) {
+  const catalogoTexto = (catalogoHabitaciones || [])
+    .map(h => `- ${h.nombre} (piso ${h.piso}): ${h.precio}, ${h.disponible ? "disponible" : "ocupada"}. ${h.descripcion}`)
+    .join("\n");
+
+  return `${INSTRUCCIONES_BASE}\n\n${REQUISITOS_Y_POLITICAS}\n\nCatálogo actual de habitaciones:\n${catalogoTexto || "(no se recibió el catálogo en esta solicitud)"}`;
+}
 
 export default {
   async fetch(request, env) {
@@ -66,7 +90,7 @@ export default {
 
 async function manejarChat(request, env) {
   try {
-    const { mensaje, historial } = await request.json();
+    const { mensaje, historial, catalogoHabitaciones } = await request.json();
     if (!mensaje) return respuestaJson({ error: "Falta el mensaje" }, 400);
 
     const contents = [
@@ -77,13 +101,16 @@ async function manejarChat(request, env) {
       { role: "user", parts: [{ text: mensaje }] }
     ];
 
+    // ⚠️ Modelo corregido: "gemini-flash-latest" no existe como ID real de la API,
+    // por eso el chatbot siempre fallaba. Este es el modelo vigente en el nivel
+    // gratuito (rápido, buen límite diario).
     const respuestaGemini = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key=${env.GEMINI_API_KEY}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${env.GEMINI_API_KEY}`,
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          system_instruction: { parts: [{ text: CONTEXTO_NEGOCIO }] },
+          system_instruction: { parts: [{ text: construirContexto(catalogoHabitaciones) }] },
           contents,
           generationConfig: { temperature: 0.4, maxOutputTokens: 300 }
         })

@@ -18,10 +18,21 @@ async function enviarMensajeChat() {
   agregarBurbuja("Escribiendo...", "bot", "chat-cargando");
 
   try {
+    // Le mandamos el catálogo actual de habitaciones (precio, piso, descripción) para
+    // que el chatbot siempre responda con la info real de script.js, sin necesitar
+    // que la dupliques a mano dentro del Worker.
+    const catalogoHabitaciones = (window.habitaciones || []).map(h => ({
+      nombre: h.nombre,
+      piso: h.piso,
+      precio: h.precio,
+      disponible: h.disponible,
+      descripcion: h.descripcion
+    }));
+
     const respuesta = await fetch(`${WORKER_URL}/chat`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ mensaje, historial: historialChat })
+      body: JSON.stringify({ mensaje, historial: historialChat, catalogoHabitaciones })
     });
 
     document.getElementById("chat-cargando")?.remove();

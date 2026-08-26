@@ -220,7 +220,9 @@ window.addEventListener("DOMContentLoaded", revisarRecordatorioPendiente);
 
 async function pintarCargos(uid) {
   const contenedor = document.getElementById("panel-cargos");
-  const q = query(collection(db, "cargos"), where("uid", "==", uid), orderBy("fecha", "desc"));
+  // Sin orderBy aquí a propósito: combinar where + orderBy en campos distintos exige
+  // un índice compuesto en Firestore. Es más simple ordenar en el navegador.
+  const q = query(collection(db, "cargos"), where("uid", "==", uid));
   const snap = await getDocs(q);
 
   if (snap.empty) {
@@ -228,8 +230,10 @@ async function pintarCargos(uid) {
     return;
   }
 
+  const docsOrdenados = [...snap.docs].sort((a, b) => (b.data().fecha || "").localeCompare(a.data().fecha || ""));
+
   contenedor.innerHTML = "";
-  snap.forEach(docSnap => {
+  docsOrdenados.forEach(docSnap => {
     const cargo = docSnap.data();
     const id = docSnap.id;
     const fila = document.createElement("div");
@@ -303,7 +307,8 @@ window.enviarSolicitud = async function () {
 
 async function pintarSolicitudes(uid) {
   const contenedor = document.getElementById("panel-solicitudes-lista");
-  const q = query(collection(db, "solicitudes"), where("uid", "==", uid), orderBy("fecha", "desc"));
+  // Igual que en pintarCargos: sin orderBy para no requerir un índice compuesto.
+  const q = query(collection(db, "solicitudes"), where("uid", "==", uid));
   const snap = await getDocs(q);
 
   if (snap.empty) {
@@ -311,8 +316,10 @@ async function pintarSolicitudes(uid) {
     return;
   }
 
+  const docsOrdenados = [...snap.docs].sort((a, b) => (b.data().fecha || "").localeCompare(a.data().fecha || ""));
+
   contenedor.innerHTML = "";
-  snap.forEach(docSnap => {
+  docsOrdenados.forEach(docSnap => {
     const s = docSnap.data();
     const fila = document.createElement("div");
     fila.className = "cargo-fila";
