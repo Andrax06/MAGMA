@@ -1,5 +1,5 @@
 // ⚠️ Debe ser la misma URL que pusiste en app.js
-const WORKER_URL = "worker-chatbot.vargasjuanexterno.workers.dev";
+const WORKER_URL = "https://worker-chatbot.vargasjuanexterno.workers.dev";
 
 let historialChat = [];
 
