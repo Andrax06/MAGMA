@@ -9,7 +9,7 @@ import {
   signOut
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-auth.js";
 import {
-  getFirestore, doc, setDoc, getDoc, updateDoc, addDoc,
+  getFirestore, doc, setDoc, getDoc, updateDoc, addDoc, deleteDoc,
   collection, query, where, orderBy, getDocs
 } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore.js";
 
@@ -29,9 +29,26 @@ const auth = getAuth(app);
 const db = getFirestore(app);
 const storage = getStorage(app);
 
-// ⚠️ Pega aquí tu UID de administrador (Firebase Console → Authentication → copia el
-// "User UID" de tu propia cuenta). Debe coincidir EXACTO con el que pongas en firestore.rules.
+// ⚠️ Debe coincidir EXACTO con el UID en firestore.rules
 const ADMIN_UIDS = ["JEj4kmfHToUotLItzPA7LWu6it73"];
+
+// HTML original del formulario de acceso, para poder restaurarlo al cerrar sesión
+const HTML_FORM_LOGIN = `
+  <div id="auth-form-login">
+      <h3>Iniciar sesión</h3>
+      <input id="login-email" type="email" placeholder="Correo">
+      <input id="login-password" type="password" placeholder="Contraseña">
+      <button onclick="manejarLogin()">Entrar</button>
+      <p>¿No tienes cuenta? <a href="#" onclick="mostrarRegistro(); return false;">Regístrate</a></p>
+  </div>
+  <div id="auth-form-registro" style="display:none">
+      <h3>Crear cuenta</h3>
+      <input id="registro-nombre" type="text" placeholder="Nombre completo">
+      <input id="registro-email" type="email" placeholder="Correo">
+      <input id="registro-password" type="password" placeholder="Contraseña (mín. 6 caracteres)">
+      <button onclick="manejarRegistro()">Registrarme</button>
+  </div>
+`;
 
 // ============================================================
 // 🔐 AUTENTICACIÓN
@@ -46,7 +63,7 @@ window.registrarInquilino = async function (email, password, nombre) {
       nombre,
       email,
       habitacionId: null,
-      diaPago: 5, // valor por defecto, el administrador lo puede ajustar luego
+      diaPago: 5,
       creado: new Date().toISOString()
     });
 
@@ -70,13 +87,33 @@ window.cerrarSesion = function () {
 };
 
 onAuthStateChanged(auth, async (user) => {
-  window.dispatchEvent(new CustomEvent("sesion-cambiada", { detail: { user } }));
+  const caja = document.getElementById("auth-caja");
+
   if (user) {
+    caja.innerHTML = `<p>Sesión iniciada como ${user.email}
+        <button onclick="cerrarSesion()">Cerrar sesión</button></p>`;
     await mostrarPanelInquilino(user.uid);
   } else {
+    // 🔧 Este es el arreglo del bug: sin esto, el formulario de login nunca
+    // volvía a aparecer después de cerrar sesión.
+    caja.innerHTML = HTML_FORM_LOGIN;
     document.getElementById("panel-inquilino").style.display = "none";
+    document.getElementById("panel-admin").style.display = "none";
   }
 });
+
+// Sincroniza qué habitaciones ya están ocupadas (colección pública "ocupacion",
+// sin datos personales) para que el catálogo no las muestre como disponibles.
+// Se ejecuta siempre, con o sin sesión iniciada.
+(async function sincronizarDisponibilidad() {
+  try {
+    const snap = await getDocs(collection(db, "ocupacion"));
+    const idsOcupados = snap.docs.map(d => Number(d.id));
+    if (window.actualizarDisponibilidad) window.actualizarDisponibilidad(idsOcupados);
+  } catch (error) {
+    console.error("No se pudo sincronizar disponibilidad:", error);
+  }
+})();
 
 // ============================================================
 // 🏠 PANEL DEL INQUILINO
@@ -93,9 +130,13 @@ async function mostrarPanelInquilino(uid) {
   pintarMiHabitacion(perfil);
   pintarRecordatorio(perfil);
   await pintarCargos(uid);
+  await pintarSolicitudes(uid);
 
   if (ADMIN_UIDS.includes(uid)) {
     document.getElementById("panel-admin").style.display = "block";
+    await adminCargarInquilinos();
+    await adminCargarCargos();
+    await adminCargarSolicitudes();
   }
 }
 
@@ -115,6 +156,10 @@ function pintarMiHabitacion(perfil) {
   `;
 }
 
+// ============================================================
+// 📅 RECORDATORIO (aviso en navegador; el correo automático corre en el Worker)
+// ============================================================
+
 function pintarRecordatorio(perfil) {
   const contenedor = document.getElementById("panel-recordatorio");
   const hoy = new Date();
@@ -126,6 +171,7 @@ function pintarRecordatorio(perfil) {
   contenedor.innerHTML = `
     <p>Tu pago vence el día <strong>${perfil.diaPago}</strong> de cada mes.</p>
     <p>Faltan <strong>${diasRestantes}</strong> día(s).</p>
+    <p style="font-size:13px;color:#666">También te llegará un correo automático 2 días antes de la fecha.</p>
     <button id="btn-activar-recordatorio">Activar aviso en este navegador</button>
     <p id="estado-recordatorio" style="font-size:13px;color:#666"></p>
   `;
@@ -137,12 +183,10 @@ function pintarRecordatorio(perfil) {
 
 function activarRecordatorioNavegador(diaPago) {
   const estado = document.getElementById("estado-recordatorio");
-
   if (!("Notification" in window)) {
     estado.textContent = "Tu navegador no soporta notificaciones.";
     return;
   }
-
   Notification.requestPermission().then(permiso => {
     if (permiso !== "granted") {
       estado.textContent = "No se activó el permiso de notificaciones.";
@@ -150,13 +194,11 @@ function activarRecordatorioNavegador(diaPago) {
     }
     localStorage.setItem("magma_dia_pago", String(diaPago));
     localStorage.setItem("magma_recordatorio_activo", "true");
-    estado.textContent = "Listo. Te avisaremos cuando abras el sitio cerca de la fecha de pago.";
+    estado.textContent = "Listo. También te avisaremos si abres el sitio cerca de la fecha.";
     revisarRecordatorioPendiente();
   });
 }
 
-// Revisa, cada vez que se carga el sitio, si hay que mostrar el aviso
-// (funciona solo mientras el usuario visita el sitio; no es un recordatorio en segundo plano).
 function revisarRecordatorioPendiente() {
   const activo = localStorage.getItem("magma_recordatorio_activo") === "true";
   const diaPago = Number(localStorage.getItem("magma_dia_pago"));
@@ -229,7 +271,62 @@ window.subirComprobanteCargo = async function (cargoId) {
 };
 
 // ============================================================
-// 👤 PANEL DE ADMINISTRADOR (solo visible para ADMIN_UIDS)
+// 📝 QUEJAS Y PETICIONES
+// ============================================================
+
+window.enviarSolicitud = async function () {
+  const usuario = auth.currentUser;
+  if (!usuario) return alert("Debes iniciar sesión.");
+
+  const tipo = document.getElementById("solicitud-tipo").value;
+  const mensajeInput = document.getElementById("solicitud-mensaje");
+  const mensaje = mensajeInput.value.trim();
+  if (!mensaje) return alert("Escribe tu queja o petición antes de enviar.");
+
+  try {
+    await addDoc(collection(db, "solicitudes"), {
+      uid: usuario.uid,
+      email: usuario.email,
+      tipo,
+      mensaje,
+      estado: "pendiente",
+      respuestaAdmin: "",
+      fecha: new Date().toISOString()
+    });
+    mensajeInput.value = "";
+    await pintarSolicitudes(usuario.uid);
+    alert("Tu solicitud fue enviada. Te responderemos aquí mismo.");
+  } catch (error) {
+    alert("Error al enviar: " + error.message);
+  }
+};
+
+async function pintarSolicitudes(uid) {
+  const contenedor = document.getElementById("panel-solicitudes-lista");
+  const q = query(collection(db, "solicitudes"), where("uid", "==", uid), orderBy("fecha", "desc"));
+  const snap = await getDocs(q);
+
+  if (snap.empty) {
+    contenedor.innerHTML = "<p>No has enviado quejas ni peticiones.</p>";
+    return;
+  }
+
+  contenedor.innerHTML = "";
+  snap.forEach(docSnap => {
+    const s = docSnap.data();
+    const fila = document.createElement("div");
+    fila.className = "cargo-fila";
+    fila.innerHTML = `
+      <p><strong>${s.tipo === "queja" ? "Queja" : "Petición"}:</strong> ${s.mensaje}</p>
+      <p style="font-size:13px;color:#666">Estado: ${s.estado === "pendiente" ? "Pendiente" : "Resuelta"}</p>
+      ${s.respuestaAdmin ? `<p style="font-size:13px"><strong>Respuesta:</strong> ${s.respuestaAdmin}</p>` : ""}
+    `;
+    contenedor.appendChild(fila);
+  });
+}
+
+// ============================================================
+// 👤 PANEL DE ADMINISTRADOR (control total, solo visible para ADMIN_UIDS)
 // ============================================================
 
 window.adminAsignarHabitacion = async function () {
@@ -241,7 +338,24 @@ window.adminAsignarHabitacion = async function () {
   if (!uid) return alert("No encontré un inquilino con ese correo.");
 
   await updateDoc(doc(db, "inquilinos", uid), { habitacionId, diaPago });
+  // Marca la habitación como ocupada en la colección pública (sin datos personales)
+  await setDoc(doc(db, "ocupacion", String(habitacionId)), { ocupada: true });
+
   alert("Habitación asignada correctamente.");
+  await adminCargarInquilinos();
+  if (window.actualizarDisponibilidad) {
+    const snap = await getDocs(collection(db, "ocupacion"));
+    window.actualizarDisponibilidad(snap.docs.map(d => Number(d.id)));
+  }
+};
+
+window.adminLiberarHabitacion = async function (uid, habitacionId) {
+  if (!confirm("¿Liberar esta habitación? El inquilino dejará de verla como asignada.")) return;
+  await updateDoc(doc(db, "inquilinos", uid), { habitacionId: null });
+  await deleteDoc(doc(db, "ocupacion", String(habitacionId)));
+  await adminCargarInquilinos();
+  const snap = await getDocs(collection(db, "ocupacion"));
+  if (window.actualizarDisponibilidad) window.actualizarDisponibilidad(snap.docs.map(d => Number(d.id)));
 };
 
 window.adminCrearCargo = async function () {
@@ -255,6 +369,7 @@ window.adminCrearCargo = async function () {
 
   await addDoc(collection(db, "cargos"), {
     uid,
+    email: correo,
     concepto,
     monto,
     fecha: new Date().toISOString(),
@@ -262,6 +377,22 @@ window.adminCrearCargo = async function () {
     comprobanteRuta: null
   });
   alert("Cargo creado correctamente.");
+  await adminCargarCargos();
+};
+
+window.adminMarcarCargoPagado = async function (cargoId) {
+  await updateDoc(doc(db, "cargos", cargoId), { estado: "pagado" });
+  await adminCargarCargos();
+};
+
+window.adminResolverSolicitud = async function (solicitudId) {
+  const respuesta = prompt("Escribe tu respuesta para el inquilino:");
+  if (respuesta === null) return;
+  await updateDoc(doc(db, "solicitudes", solicitudId), {
+    estado: "resuelta",
+    respuestaAdmin: respuesta
+  });
+  await adminCargarSolicitudes();
 };
 
 async function buscarUidPorCorreo(correo) {
@@ -269,4 +400,83 @@ async function buscarUidPorCorreo(correo) {
   const snap = await getDocs(q);
   if (snap.empty) return null;
   return snap.docs[0].id;
+}
+
+// --- Vistas de control total ---
+
+async function adminCargarInquilinos() {
+  const contenedor = document.getElementById("admin-lista-inquilinos");
+  const snap = await getDocs(collection(db, "inquilinos"));
+
+  const total = snap.size;
+  let ocupadas = 0;
+  contenedor.innerHTML = "";
+
+  snap.forEach(docSnap => {
+    const i = docSnap.data();
+    if (i.habitacionId) ocupadas++;
+    const habitacion = (window.habitaciones || []).find(h => h.id === i.habitacionId);
+    const fila = document.createElement("div");
+    fila.className = "cargo-fila";
+    fila.innerHTML = `
+      <p><strong>${i.nombre}</strong> — ${i.email}</p>
+      <p style="font-size:13px;color:#666">
+        Habitación: ${habitacion ? habitacion.nombre : "sin asignar"} · Día de pago: ${i.diaPago}
+      </p>
+      ${i.habitacionId ? `<button onclick="adminLiberarHabitacion('${docSnap.id}', ${i.habitacionId})">Liberar habitación</button>` : ""}
+    `;
+    contenedor.appendChild(fila);
+  });
+
+  document.getElementById("admin-resumen").textContent =
+    `${total} inquilino(s) registrados · ${ocupadas} habitación(es) ocupadas`;
+}
+
+async function adminCargarCargos() {
+  const contenedor = document.getElementById("admin-lista-cargos");
+  const q = query(collection(db, "cargos"), orderBy("fecha", "desc"));
+  const snap = await getDocs(q);
+
+  contenedor.innerHTML = "";
+  if (snap.empty) {
+    contenedor.innerHTML = "<p>No hay cargos registrados.</p>";
+    return;
+  }
+
+  snap.forEach(docSnap => {
+    const c = docSnap.data();
+    const fila = document.createElement("div");
+    fila.className = "cargo-fila";
+    fila.innerHTML = `
+      <p><strong>${c.concepto}</strong> — ${c.monto.toLocaleString("es-CO")} COP</p>
+      <p style="font-size:13px;color:#666">${c.email || c.uid} · Estado: ${c.estado}</p>
+      ${c.estado !== "pagado" ? `<button onclick="adminMarcarCargoPagado('${docSnap.id}')">Marcar como pagado</button>` : ""}
+    `;
+    contenedor.appendChild(fila);
+  });
+}
+
+async function adminCargarSolicitudes() {
+  const contenedor = document.getElementById("admin-lista-solicitudes");
+  const q = query(collection(db, "solicitudes"), orderBy("fecha", "desc"));
+  const snap = await getDocs(q);
+
+  contenedor.innerHTML = "";
+  if (snap.empty) {
+    contenedor.innerHTML = "<p>No hay quejas ni peticiones.</p>";
+    return;
+  }
+
+  snap.forEach(docSnap => {
+    const s = docSnap.data();
+    const fila = document.createElement("div");
+    fila.className = "cargo-fila";
+    fila.innerHTML = `
+      <p><strong>${s.tipo === "queja" ? "Queja" : "Petición"}</strong> de ${s.email}</p>
+      <p style="font-size:13px">${s.mensaje}</p>
+      <p style="font-size:13px;color:#666">Estado: ${s.estado}</p>
+      ${s.estado === "pendiente" ? `<button onclick="adminResolverSolicitud('${docSnap.id}')">Responder / resolver</button>` : `<p style="font-size:13px"><strong>Tu respuesta:</strong> ${s.respuestaAdmin}</p>`}
+    `;
+    contenedor.appendChild(fila);
+  });
 }

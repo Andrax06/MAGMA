@@ -1,4 +1,4 @@
-// ⚠️ Debe ser la misma URL que pusiste en app.js
+// ⚠️ Debe ser la misma URL de tu Worker, con https:// al inicio
 const WORKER_URL = "https://worker-chatbot.vargasjuanexterno.workers.dev";
 
 let historialChat = [];
@@ -23,20 +23,28 @@ async function enviarMensajeChat() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ mensaje, historial: historialChat })
     });
-    const datos = await respuesta.json();
 
     document.getElementById("chat-cargando")?.remove();
 
+    if (!respuesta.ok) {
+      // El Worker respondió, pero con un error (revisa los Logs del Worker en Cloudflare)
+      console.error("El Worker respondió con error:", respuesta.status, await respuesta.text());
+      agregarBurbuja("El asistente tuvo un problema respondiendo. Intenta de nuevo.", "bot");
+      return;
+    }
+
+    const datos = await respuesta.json();
     const textoRespuesta = datos.respuesta || "Hubo un error, intenta de nuevo.";
     agregarBurbuja(textoRespuesta, "bot");
 
     historialChat.push({ rol: "usuario", texto: mensaje });
     historialChat.push({ rol: "bot", texto: textoRespuesta });
-
-    // Evita que el historial crezca sin límite
     if (historialChat.length > 12) historialChat = historialChat.slice(-12);
   } catch (error) {
+    // Esto es un fallo de RED (el fetch nunca llegó a completarse): URL mal escrita,
+    // Worker no desplegado, o CORS. El error real queda en la consola para depurar.
     document.getElementById("chat-cargando")?.remove();
+    console.error("No se pudo conectar con el Worker del chatbot:", error);
     agregarBurbuja("No pude conectarme. Intenta de nuevo en un momento.", "bot");
   }
 }

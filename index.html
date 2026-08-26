@@ -4,6 +4,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>MAGMA</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;600;700&family=Work+Sans:wght@400;500;600&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="estilos.css">
     <link rel="stylesheet" href="chatbot-estilos.css">
 </head>
@@ -39,34 +42,62 @@
 
     <!-- Panel del inquilino (oculto hasta iniciar sesión) -->
     <section id="panel-inquilino" style="display:none">
-        <div class="panel-caja">
-            <h3>Mi habitación</h3>
-            <div id="panel-habitacion"></div>
-        </div>
-        <div class="panel-caja">
-            <h3>Recordatorio de pago</h3>
-            <div id="panel-recordatorio"></div>
-        </div>
-        <div class="panel-caja">
-            <h3>Mis cuentas</h3>
-            <div id="panel-cargos"></div>
+        <div class="panel-grid">
+            <div class="panel-caja">
+                <h3>Mi habitación</h3>
+                <div id="panel-habitacion"></div>
+            </div>
+            <div class="panel-caja">
+                <h3>Recordatorio de pago</h3>
+                <div id="panel-recordatorio"></div>
+            </div>
+            <div class="panel-caja">
+                <h3>Mis cuentas</h3>
+                <div id="panel-cargos"></div>
+            </div>
+            <div class="panel-caja">
+                <h3>Quejas y peticiones</h3>
+                <select id="solicitud-tipo">
+                    <option value="queja">Queja</option>
+                    <option value="peticion">Petición</option>
+                </select>
+                <textarea id="solicitud-mensaje" rows="3" placeholder="Cuéntanos qué pasó o qué necesitas..."></textarea>
+                <button onclick="enviarSolicitud()">Enviar</button>
+                <div id="panel-solicitudes-lista" style="margin-top:12px"></div>
+            </div>
         </div>
 
         <!-- Panel de administrador (oculto salvo para ADMIN_UIDS) -->
-        <div id="panel-admin" class="panel-caja" style="display:none">
-            <h3>Administrador</h3>
+        <div id="panel-admin" class="panel-caja panel-admin" style="display:none">
+            <h3>Panel de administrador</h3>
+            <p id="admin-resumen" class="admin-resumen"></p>
 
-            <h4>Asignar habitación</h4>
-            <input id="admin-correo-hab" type="email" placeholder="Correo del inquilino">
-            <input id="admin-habitacion-id" type="number" placeholder="Número de habitación (ej. 101)">
-            <input id="admin-dia-pago" type="number" placeholder="Día de pago (1-28)">
-            <button onclick="adminAsignarHabitacion()">Asignar</button>
+            <div class="panel-grid">
+                <div>
+                    <h4>Asignar habitación</h4>
+                    <input id="admin-correo-hab" type="email" placeholder="Correo del inquilino">
+                    <input id="admin-habitacion-id" type="number" placeholder="Número de habitación (ej. 101)">
+                    <input id="admin-dia-pago" type="number" placeholder="Día de pago (1-28)">
+                    <button onclick="adminAsignarHabitacion()">Asignar</button>
 
-            <h4>Crear cargo (cuenta aparte)</h4>
-            <input id="admin-correo-cargo" type="email" placeholder="Correo del inquilino">
-            <input id="admin-concepto" type="text" placeholder="Concepto (ej. Daño en puerta)">
-            <input id="admin-monto" type="number" placeholder="Monto en COP">
-            <button onclick="adminCrearCargo()">Crear cargo</button>
+                    <h4>Crear cargo (cuenta aparte)</h4>
+                    <input id="admin-correo-cargo" type="email" placeholder="Correo del inquilino">
+                    <input id="admin-concepto" type="text" placeholder="Concepto (ej. Daño en puerta)">
+                    <input id="admin-monto" type="number" placeholder="Monto en COP">
+                    <button onclick="adminCrearCargo()">Crear cargo</button>
+                </div>
+
+                <div>
+                    <h4>Inquilinos registrados</h4>
+                    <div id="admin-lista-inquilinos"></div>
+                </div>
+            </div>
+
+            <h4>Todos los cargos</h4>
+            <div id="admin-lista-cargos"></div>
+
+            <h4>Quejas y peticiones de todos los inquilinos</h4>
+            <div id="admin-lista-solicitudes"></div>
         </div>
     </section>
 
@@ -116,6 +147,8 @@
     <script type="module" src="app.js"></script>
     <script type="module" src="chatbot.js"></script>
 
+    <!-- El manejo de sesión (mostrar/ocultar formularios) ahora vive dentro de app.js,
+         esto solo conecta los botones del HTML con las funciones globales -->
     <script>
         function mostrarRegistro() {
             document.getElementById("auth-form-login").style.display = "none";
@@ -136,14 +169,6 @@
             const resultado = await window.registrarInquilino(email, password, nombre);
             if (!resultado.ok) alert("Error: " + resultado.error);
         }
-
-        window.addEventListener("sesion-cambiada", (evento) => {
-            const caja = document.getElementById("auth-caja");
-            if (evento.detail.user) {
-                caja.innerHTML = `<p>Sesión iniciada como ${evento.detail.user.email}
-                    <button onclick="cerrarSesion()">Cerrar sesión</button></p>`;
-            }
-        });
     </script>
 </body>
 </html>
